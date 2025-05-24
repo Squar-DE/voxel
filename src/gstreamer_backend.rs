@@ -90,10 +90,6 @@ impl GStreamerBackend {
         start_time: f64,
         end_time: f64,
     ) -> anyhow::Result<()> {
-        // This is a placeholder implementation
-        // In a real video editor, you would create a GStreamer pipeline like:
-        // filesrc -> decodebin -> videoconvert -> x264enc -> mp4mux -> filesink
-        // with proper seek handling for trimming
         
         println!("Export placeholder:");
         println!("  Input: {}", input_path.display());
@@ -102,8 +98,6 @@ impl GStreamerBackend {
         println!("  End: {}s", end_time);
         println!("  Duration: {}s", end_time - start_time);
         
-        // For a real implementation, you'd want something like:
-        /*
         let pipeline = gstreamer::Pipeline::new();
         
         let filesrc = gstreamer::ElementFactory::make("filesrc").build()?;
@@ -120,7 +114,6 @@ impl GStreamerBackend {
         
         // Link elements and handle seek events for trimming
         // This requires more complex GStreamer pipeline management
-        */
         
         Ok(())
     }
