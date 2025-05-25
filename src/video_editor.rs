@@ -1,6 +1,6 @@
 use gtk4::prelude::*;
-use gtk4::{Application, Button, Scale};
-use libadwaita::{ApplicationWindow as AdwApplicationWindow, ToastOverlay, Toast};
+use gtk4::{Application, Button};
+use libadwaita::{ApplicationWindow as AdwApplicationWindow, ToastOverlay, Toast, HeaderBar};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::path::PathBuf;
@@ -14,8 +14,6 @@ pub struct VideoEditor {
     ui: VideoEditorUI,
     backend: GStreamerBackend,
     current_file: Rc<RefCell<Option<PathBuf>>>,
-    start_time: Rc<RefCell<f64>>,
-    end_time: Rc<RefCell<f64>>,
     toast_overlay: ToastOverlay,
 }
 
@@ -23,10 +21,11 @@ impl VideoEditor {
     pub fn new(app: &Application) -> Self {
         let window = AdwApplicationWindow::builder()
             .application(app)
-            .title("Voxel")
-            .default_width(800)
-            .default_height(600)
+            .title("Voxel Video Editor")
+            .default_width(1000)
+            .default_height(700)
             .build();
+
 
         let toast_overlay = ToastOverlay::new();
         window.set_content(Some(&toast_overlay));
@@ -39,8 +38,6 @@ impl VideoEditor {
             ui: ui.clone(),
             backend,
             current_file: Rc::new(RefCell::new(None)),
-            start_time: Rc::new(RefCell::new(0.0)),
-            end_time: Rc::new(RefCell::new(0.0)),
             toast_overlay,
         };
 
@@ -70,17 +67,6 @@ impl VideoEditor {
         let backend = self.backend.clone();
         self.ui.stop_button.connect_clicked(move |_| {
             backend.stop();
-        });
-
-        // Timeline controls
-        let start_time = self.start_time.clone();
-        self.ui.start_scale.connect_value_changed(move |scale| {
-            *start_time.borrow_mut() = scale.value();
-        });
-
-        let end_time = self.end_time.clone();
-        self.ui.end_scale.connect_value_changed(move |scale| {
-            *end_time.borrow_mut() = scale.value();
         });
 
         // Export
@@ -122,15 +108,8 @@ impl VideoEditor {
 
     fn load_video(&self, path: PathBuf) {
         match self.backend.load_video(&path) {
-            Ok(duration) => {
+            Ok(_) => {
                 *self.current_file.borrow_mut() = Some(path);
-                *self.end_time.borrow_mut() = duration;
-                
-                // Update timeline scales
-                self.ui.start_scale.set_range(0.0, duration);
-                self.ui.end_scale.set_range(0.0, duration);
-                self.ui.end_scale.set_value(duration);
-                
                 self.show_toast("Video loaded successfully");
             }
             Err(e) => {
@@ -154,7 +133,7 @@ impl VideoEditor {
             &[("Cancel", ResponseType::Cancel), ("Save", ResponseType::Accept)],
         );
 
-        dialog.set_current_name("trimmed_video.mp4");
+        dialog.set_current_name("edited_video.mp4");
 
         let editor_clone = self.clone();
         dialog.connect_response(move |dialog, response| {
@@ -177,25 +156,12 @@ impl VideoEditor {
             None => return,
         };
 
-        let start_time = *self.start_time.borrow();
-        let end_time = *self.end_time.borrow();
+        let start_time = 0.0;
+        let end_time = 60.0;
 
-        if start_time >= end_time {
-            self.show_toast("Invalid time range");
-            return;
-        }
-
-        // Export using backend
         match self.backend.export_video(&input_path, &output_path, start_time, end_time) {
             Ok(_) => {
-                self.show_toast("Export started");
-                
-                // Simulate completion (replace with actual progress tracking)
-                let toast_overlay = self.toast_overlay.clone();
-                gtk4::glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
-                    let toast = Toast::new("Export completed (placeholder)");
-                    toast_overlay.add_toast(toast);
-                });
+                self.show_toast("Video exported successfully");
             }
             Err(e) => {
                 self.show_toast(&format!("Export failed: {}", e));

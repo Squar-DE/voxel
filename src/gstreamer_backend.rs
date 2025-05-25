@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::path::PathBuf;
 
+
 #[derive(Clone)]
 pub struct GStreamerBackend {
     video_widget: Video,
@@ -45,7 +46,7 @@ impl GStreamerBackend {
         }
 
         let duration_seconds = if let Some(d) = duration {
-            d.seconds() as f64
+            d.seconds() as f64 // idfk
         } else {
             0.0
         };
@@ -90,31 +91,40 @@ impl GStreamerBackend {
         start_time: f64,
         end_time: f64,
     ) -> anyhow::Result<()> {
+        let pipeline_str = format!(
+            "filesrc location={} ! decodebin name=dec ! queue ! videoconvert ! \
+            videotrim start={} stop={} ! queue ! x264enc ! mp4mux ! filesink location={}",
+            input_path.display(),
+            start_time * 1_000_000_000.0, // Convert to nanoseconds
+            end_time * 1_000_000_000.0,
+            output_path.display()
+        );
+
+        let pipeline = gstreamer::parse_launch(&pipeline_str)?;
+        let pipeline = pipeline.downcast::<gstreamer::Pipeline>().unwrap();
         
-        println!("Export placeholder:");
-        println!("  Input: {}", input_path.display());
-        println!("  Output: {}", output_path.display());
-        println!("  Start: {}s", start_time);
-        println!("  End: {}s", end_time);
-        println!("  Duration: {}s", end_time - start_time);
+        pipeline.set_state(gstreamer::State::Playing)?;
         
-        let pipeline = gstreamer::Pipeline::new();
+        // Wait for export to complete
+        let bus = pipeline.bus().unwrap();
+        while let Some(msg) = bus.timed_pop(gstreamer::ClockTime::NONE) {
+            use gstreamer::MessageView;
+            
+            match msg.view() {
+                MessageView::Eos(..) => break,
+                MessageView::Error(err) => {
+                    return Err(anyhow::anyhow!(
+                        "Error from {}: {} ({})",
+                        msg.src().map(|s| s.path_string()).unwrap_or_default(),
+                        err.error(),
+                        err.debug().unwrap_or_default()
+                    ));
+                }
+                _ => (),
+            }
+        }
         
-        let filesrc = gstreamer::ElementFactory::make("filesrc").build()?;
-        filesrc.set_property("location", input_path.to_str().unwrap());
-        
-        let decodebin = gstreamer::ElementFactory::make("decodebin").build()?;
-        let videoconvert = gstreamer::ElementFactory::make("videoconvert").build()?;
-        let encoder = gstreamer::ElementFactory::make("x264enc").build()?;
-        let muxer = gstreamer::ElementFactory::make("mp4mux").build()?;
-        let filesink = gstreamer::ElementFactory::make("filesink").build()?;
-        filesink.set_property("location", output_path.to_str().unwrap());
-        
-        pipeline.add_many(&[&filesrc, &decodebin, &videoconvert, &encoder, &muxer, &filesink])?;
-        
-        // Link elements and handle seek events for trimming
-        // This requires more complex GStreamer pipeline management
-        
+        pipeline.set_state(gstreamer::State::Null)?;
         Ok(())
     }
 }
