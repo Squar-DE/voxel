@@ -7,7 +7,7 @@ use gtk4::prelude::*;
 use gtk4::{glib, Application};
 use app::VideoEditorApp;
 
-const APP_ID: &str = "com.squarDE.Voxel";
+const APP_ID: &str = "org.squarDE.Voxel";
 
 fn main() -> glib::ExitCode {
     // Initialize GStreamer
